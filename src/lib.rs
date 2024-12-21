@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, BufRead};
+use wasm_bindgen::prelude::*;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CachedWordData {
@@ -11,7 +12,6 @@ pub struct CachedWordData {
     pub presence_index: HashMap<char, Vec<usize>>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
 pub struct WordData {
     pub word_list: Vec<String>,
     pub bitmask_array: Vec<u32>,
@@ -20,8 +20,9 @@ pub struct WordData {
     pub possible_word_ids: Vec<usize>
 }
 
+#[wasm_bindgen]
 impl WordData {
-    
+    #[wasm_bindgen(constructor)]
     pub fn new(file_path: &str, mode: &str) -> Result<Self, std::io::Error> {
         let mut word_data = WordData {
             word_list: Vec::new(),
@@ -56,7 +57,7 @@ impl WordData {
         Ok(word_data)
     }
 
-    pub fn create_word_list(file_path: &str) -> Result<Vec<String>, std::io::Error> {
+    fn create_word_list(file_path: &str) -> Result<Vec<String>, std::io::Error> {
         println!("Opening file: {}", file_path);
         let file = std::fs::File::open(file_path)?;
         let reader = std::io::BufReader::new(file);
@@ -105,7 +106,7 @@ impl WordData {
         presence_index
     }
 
-    pub fn load_from_cache(&mut self, cache_file: &str) -> bool {
+    fn load_from_cache(&mut self, cache_file: &str) -> bool {
         if let Ok(file) = File::open(cache_file) {
             let reader = BufReader::new(file);
             if let Ok(cached_data) = bincode::deserialize_from::<_, CachedWordData>(reader) {
@@ -124,7 +125,7 @@ impl WordData {
         false
     }
 
-    pub fn save_to_cache(&self, cache_file: &str) {
+    fn save_to_cache(&self, cache_file: &str) {
         if let Ok(file) = File::create(cache_file) {
             let writer = BufWriter::new(file);
             let cached_data = CachedWordData {
@@ -165,47 +166,67 @@ impl WordData {
             .collect()
     }
 
-    pub fn contains(&mut self, letters: &str) -> &mut Self {
+    #[wasm_bindgen]
+    pub fn contains(&mut self, letters: &str, debug: bool) -> &mut Self {
         for letter in letters.chars() {
             let filtered_ids = self.containing_letter(letter);
             self.possible_word_ids.retain(|id| filtered_ids.contains(id));
         }
-        println!("Filtered IDs (contains '{}'): {:?}", letters, self.possible_word_ids);
+        if debug {
+            print!("\nFiltered words (contains '{}'):", letters);
+            for id in &self.possible_word_ids {
+                print!("{} ", self.word_list[*id]);
+            }
+        }
         self
     }
 
-    pub fn doesnt_contain(&mut self, letters: &str) -> &mut Self {
+    #[wasm_bindgen]
+    pub fn doesnt_contain(&mut self, letters: &str, debug: bool) -> &mut Self {
         for letter in letters.chars() {
             let filtered_ids = self.containing_letter(letter);
             self.possible_word_ids.retain(|id| !filtered_ids.contains(id));
         }
-        println!(
-            "Filtered IDs (doesn't contain '{}'): {:?}",
-            letters, self.possible_word_ids
-        );
+        if debug {
+            print!("\nFiltered words (contains '{}'):", letters);
+            for id in &self.possible_word_ids {
+                print!("{} ", self.word_list[*id]);
+            }
+        }
         self
     }
 
-    pub fn at_position(&mut self, position: usize, letter: char) -> &mut Self {
-        let filtered_ids = self.containing_letter_at(letter, position);
-        self.possible_word_ids.retain(|id| filtered_ids.contains(id));
-        println!(
-            "Filtered IDs (at position {} with '{}'): {:?}",
-            position, letter, self.possible_word_ids
-        );
+    #[wasm_bindgen]
+    pub fn at_position(&mut self, position: usize, letters: &str, debug: bool) -> &mut Self {
+        for letter in letters.chars() {
+            let filtered_ids = self.containing_letter_at(letter, position);
+            self.possible_word_ids.retain(|id| filtered_ids.contains(id));
+        }
+        if debug {
+            print!("\nFiltered words (contains '{}' at '{}'):", letters, position);
+            for id in &self.possible_word_ids {
+                print!("{} ", self.word_list[*id]);
+            }
+        }
         self
     }
 
-    pub fn not_at_position(&mut self, position: usize, letter: char) -> &mut Self {
-        let filtered_ids = self.containing_letter_at(letter, position);
-        self.possible_word_ids.retain(|id| !filtered_ids.contains(id));
-        println!(
-            "Filtered IDs (not at position {} with '{}'): {:?}",
-            position, letter, self.possible_word_ids
-        );
+    #[wasm_bindgen]
+    pub fn not_at_position(&mut self, position: usize, letters: &str, debug: bool) -> &mut Self {
+        for letter in letters.chars() {
+            let filtered_ids = self.containing_letter_at(letter, position);
+            self.possible_word_ids.retain(|id| !filtered_ids.contains(id));
+        }
+        if debug {
+            print!("\nFiltered words (doesn't contain '{}' at '{}'):", letters, position);
+            for id in &self.possible_word_ids {
+                print!("{} ", self.word_list[*id]);
+            }
+        }
         self
     }
 
+    #[wasm_bindgen]
     pub fn results(&self) -> Vec<String> {
         self.possible_word_ids
             .iter()
